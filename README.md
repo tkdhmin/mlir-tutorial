@@ -38,6 +38,7 @@ This should create the `bazel` command on your system.
 You should also have a modern C++ compiler on your system, either `gcc` or
 `clang`, which Bazel will detect.
 
+
 ### Build and test
 
 Run
@@ -55,23 +56,98 @@ Bazel. If you're unfamiliar with CMake, you can read the tutorials at
 CMake build is maintained, but was added at article 10 (Dialect Conversion) and
 will not be explained in the articles.
 
-### Prerequisites
+You can build LLVM and MLIR only with the following few steps.
+### Step 0: Prerequisites
 
 *   Make sure you have installed everything needed to build LLVM
     https://llvm.org/docs/GettingStarted.html#software
 *   For this recipe Ninja is used so be sure to have it as well installed
     https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages
+* Pybind
+```bash
+$ pip install pybind11
+```
+* protoc
+```bash
+$ git clone https://github.com/protocolbuffers/protobuf.git
+$ cd protobuf
+$ git checkout v3.20.0
+$ git submodule update --init --recursive
+$ mkdir build_source && cd build_source
+$ cmake ../cmake -Dprotobuf_BUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_POSITION_INDEPENDENT_CODE=ON -Dprotobuf_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
+$ make -j$(nproc)
+$ sudo make install
+```
+* g++9
+```bash
+$ sudo apt-get install gcc-9 g++-9
+$ sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 90 # Adjust the your priority value
+$ sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 90 # Adjust the your priority value
+$ g++ --version # Check whether the g++ version is 9 series.
+```
 
-### Checking out the code
-
+### Step 1: Checking out the code
 Checkout the tutorial including the LLVM dependency (submodules):
 
 ```bash
-git clone --recurse-submodules https://github.com/j2kun/mlir-tutorial.git
-cd mlir-tutorial
+$ git clone --recurse-submodules https://github.com/j2kun/mlir-tutorial.git
+$ cd mlir-tutorial
 ```
 
-### Building dependencies
+### Step 2: Build LLVM with MLIR
+Note that the build script below is suitable for the ubuntuOS environment with ninja building system.
+```bash
+#!/bin/sh
+
+BUILD_SYSTEM=Ninja
+BUILD_TAG=ninja
+THIRDPARTY_LLVM_DIR=/home/dhmin/mlir-tutorial/externals/llvm-project # Make sure that this path is valid to your env.
+BUILD_DIR=$THIRDPARTY_LLVM_DIR/build
+INSTALL_DIR=$THIRDPARTY_LLVM_DIR/install
+
+mkdir -p $BUILD_DIR
+mkdir -p $INSTALL_DIR
+
+cd $BUILD_DIR
+
+cmake ../llvm -G $BUILD_SYSTEM \
+      -DCMAKE_CXX_COMPILER="/usr/bin/g++" \
+      -DCMAKE_C_COMPILER="/usr/bin/gcc" \
+      -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR \
+      -DLLVM_LOCAL_RPATH=$INSTALL_DIR/lib \
+      -DLLVM_PARALLEL_COMPILE_JOBS=7 \
+      -DLLVM_PARALLEL_LINK_JOBS=1 \
+      -DLLVM_BUILD_EXAMPLES=OFF \
+      -DLLVM_INSTALL_UTILS=ON \
+      -DCMAKE_OSX_ARCHITECTURES="$(uname -m)" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DLLVM_ENABLE_ASSERTIONS=ON \
+      -DLLVM_CCACHE_BUILD=OFF \
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+      -DLLVM_ENABLE_PROJECTS='mlir'
+
+cmake --build . --target check-mlir
+```
+
+### Step 3: Build mlir-tutorial
+Make a build and create the script by using the following code in the build directory. Please make sure that the LLMV_BUILD_DIR is valid to your environment.
+
+```bash
+BUILD_SYSTEM="Ninja"
+LLVM_BUILD_DIR="/home/dhmin/mlir-tutorial/externals/llvm-project/build"
+
+cmake -G $BUILD_SYSTEM .. \
+    -DCMAKE_C_COMPILER=/usr/bin/gcc \
+    -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
+    -DLLVM_DIR="$LLVM_BUILD_DIR/lib/cmake/llvm" \
+    -DMLIR_DIR="$LLVM_BUILD_DIR/lib/cmake/mlir" \
+    -DBUILD_DEPS="ON" \
+    -DBUILD_SHARED_LIBS="OFF" \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_CXX_STANDARD=17
+```
+
+### Building dependencies ([Original code from Source](https://github.com/j2kun/mlir-tutorial))
 
 Note: The following steps are suitable for macOs and use ninja as building
 system, they should not be hard to adapt for your environment.
@@ -115,7 +191,7 @@ cmake --build . --target check-mlir
 popd
 ```
 
-### Build and test
+### Build and test ([Original code from Source](https://github.com/j2kun/mlir-tutorial))
 
 ```bash
 #!/bin/sh
@@ -125,7 +201,7 @@ BUILD_DIR=./build-`echo ${BUILD_SYSTEM}| tr '[:upper:]' '[:lower:]'`
 
 rm -rf $BUILD_DIR
 mkdir $BUILD_DIR
-pushd $BUILD_DIR
+cd $BUILD_DIR
 
 LLVM_BUILD_DIR=externals/llvm-project/build
 cmake -G $BUILD_SYSTEM .. \
@@ -135,7 +211,7 @@ cmake -G $BUILD_SYSTEM .. \
     -DBUILD_SHARED_LIBS="OFF" \
     -DCMAKE_BUILD_TYPE=Debug
 
-popd
+cd ..
 
 cmake --build $BUILD_DIR --target MLIRAffineFullUnrollPasses
 cmake --build $BUILD_DIR --target MLIRMulToAddPasses
