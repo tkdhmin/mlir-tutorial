@@ -18,6 +18,72 @@ This is the code repository for a series of articles on the
 11. [Lowering through LLVM](https://jeremykun.com/2023/11/01/mlir-lowering-through-llvm/)
 12. [A Global Optimization and Dataflow Analysis](https://jeremykun.com/2023/11/15/mlir-a-global-optimization-and-dataflow-analysis/)
 
+
+## Appendix for Articles
+### Chapter 2: Running and Testing a Lowering
+#### Build for examples programs
+In the article, the examples programmed by MLIR are described. The example is to cout the leading zeros of a 32-bit interger digit.
+
+1) Create `ctlz.mlir` file with the following content.
+
+
+```llvm
+func.func @main(%arg0: i32) -> i32 {
+  %0 = func.call @my_ctlz(%arg0) : (i32) -> i32
+  func.return %0 : i32
+}
+func.func @my_ctlz(%arg0: i32) -> i32 {
+  %c32_i32 = arith.constant 32 : i32
+  %c0_i32 = arith.constant 0 : i32
+  %0 = arith.cmpi eq, %arg0, %c0_i32 : i32
+  %1 = scf.if %0 -> (i32) {
+    scf.yield %c32_i32 : i32
+  } else {
+    %c1 = arith.constant 1 : index
+    %c1_i32 = arith.constant 1 : i32
+    %c32 = arith.constant 32 : index
+    %c0_i32_0 = arith.constant 0 : i32
+    %2:2 = scf.for %arg1 = %c1 to %c32 step %c1 iter_args(%arg2 = %arg0, %arg3 = %c0_i32_0) -> (i32, i32) {
+      %3 = arith.cmpi slt, %arg2, %c0_i32 : i32
+      %4:2 = scf.if %3 -> (i32, i32) {
+        scf.yield %arg2, %arg3 : i32, i32
+      } else {
+        %5 = arith.addi %arg3, %c1_i32 : i32
+        %6 = arith.shli %arg2, %c1_i32 : i32
+        scf.yield %6, %5 : i32, i32
+      }
+      scf.yield %4#0, %4#1 : i32, i32
+    }
+    scf.yield %2#1 : i32
+  }
+  func.return %1 : i32
+}
+```
+2) Run mlir-opt to the source code using user-desired options like the following:
+
+```bash
+$ ./build/bin/mlir-opt --convert-scf-to-cf --convert-func-to-llvm --convert-arith-to-llvm ctlz.mlir -o ctlz.llvm.mlir
+```
+
+3) Translate the output into llvmir.
+
+```bash
+$ ./build/bin/mlir-translate --mlir-to-llvmir ctlz.llvm.mlir > ctlz.ll
+```
+
+4) Fix the error of the `ctlz.ll` encountered during clang compilation
+
+```llvm
+"""ctlz.ll"""
+declare i8* @malloc(i64)
+
+declare void @free(i8)
+```
+
+5) Run clang to create a binary executable
+```bash
+$ clang ctlz.ll -o ctlz
+```
 ## Bazel build
 
 Bazel is one of two supported build systems for this tutorial. The other is
