@@ -19,13 +19,12 @@ This is the code repository for a series of articles on the
 12. [A Global Optimization and Dataflow Analysis](https://jeremykun.com/2023/11/15/mlir-a-global-optimization-and-dataflow-analysis/)
 
 
-## Appendix for Articles
+## Appendix for Articles (Tips from dhmin)
 ### Chapter 2: Running and Testing a Lowering
 #### Build for examples programs
 In the article, the examples programmed by MLIR are described. The example is to cout the leading zeros of a 32-bit interger digit.
 
 1) Create `ctlz.mlir` file with the following content.
-
 
 ```llvm
 func.func @main(%arg0: i32) -> i32 {
@@ -84,6 +83,41 @@ declare void @free(i8)
 ```bash
 $ clang ctlz.ll -o ctlz
 ```
+
+### Chapter 3: MLIR Writing our first pass
+#### Build for example of `Transform` pass usage
+
+In the article, the loop unrolling provided by `affine` dialect is the example of the usage of pass infrastructure.
+
+1. Clarify the location of the following file:
+```llvm
+// location: mlir-tutorial/tests/affine_loop_unroll.mlir
+func.func @test_single_nested_loop(%buffer: memref<4xi32>) -> (i32) {
+  %sum_0 = arith.constant 0 : i32
+  // CHECK-LABEL: test_single_nested_loop
+  // CHECK-NOT: affine.for
+  %sum = affine.for %i = 0 to 4 iter_args(%sum_iter = %sum_0) -> i32 {
+    %t = affine.load %buffer[%i] : memref<4xi32>
+    %sum_next = arith.addi %sum_iter, %t : i32
+    affine.yield %sum_next : i32
+  }
+  return %sum : i32
+}
+```
+
+2. Go to the `build/tools`.
+```bash
+cd build/tools
+```
+
+3. Execute the `tutorial-opt` binary with the `-affine-full-unroll` option.
+```bash
+./tutorial-opt ../../tests/affine_loop_unroll.mlir -affine-full-unroll -o output.mlir
+```
+
+4. Check the `output.mlir` where the loop has been unrolled.
+
+
 ## Bazel build
 
 Bazel is one of two supported build systems for this tutorial. The other is
